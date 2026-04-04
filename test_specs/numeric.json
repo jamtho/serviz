@@ -1,0 +1,5 @@
+{
+  "sql": "SELECT i AS x, sin(i * 0.1) AS y FROM range(1000) t(i)",
+  "layers": [{"mark": "line"}],
+  "title": "Sine Wave"
+}

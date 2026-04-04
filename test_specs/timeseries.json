@@ -1,0 +1,5 @@
+{
+  "sql": "SELECT TIMESTAMP '2024-01-01' + INTERVAL (i) HOUR AS time, sin(i * 0.1) * 20 + 50 + random() * 5 AS value FROM range(720) t(i)",
+  "layers": [{"mark": "line"}],
+  "title": "Temperature (30 days)"
+}

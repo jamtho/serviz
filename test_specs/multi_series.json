@@ -1,0 +1,5 @@
+{
+  "sql": "SELECT i AS x, sin(i * 0.05) AS y, 'sin' AS series FROM range(500) t(i) UNION ALL SELECT i AS x, cos(i * 0.05) AS y, 'cos' AS series FROM range(500) t(i)",
+  "layers": [{"mark": "line"}],
+  "title": "Sin vs Cos"
+}
