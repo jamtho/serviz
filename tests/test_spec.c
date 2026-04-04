@@ -6,7 +6,8 @@
 static void test_minimal(void) {
     const char *json = "{\"sql\":\"SELECT 1\",\"layers\":[{\"mark\":\"line\"}]}";
     Spec spec;
-    assert(spec_parse_string(json, &spec) == 0);
+    int rc = spec_parse_string(json, &spec);
+    assert(rc == 0);
     assert(strcmp(spec.sql, "SELECT 1") == 0);
     assert(spec.layer_count == 1);
     assert(spec.layers[0].mark == MARK_LINE);
@@ -26,7 +27,8 @@ static void test_full(void) {
         "  {\"mark\":\"line\",\"name\":\"Sensor B\"}"
         "]}";
     Spec spec;
-    assert(spec_parse_string(json, &spec) == 0);
+    int rc = spec_parse_string(json, &spec);
+    assert(rc == 0);
     assert(strcmp(spec.title, "My Chart") == 0);
     assert(spec.layer_count == 2);
     assert(spec.layers[0].mark == MARK_POINT);
@@ -44,34 +46,39 @@ static void test_full(void) {
 static void test_missing_sql(void) {
     const char *json = "{\"layers\":[{\"mark\":\"line\"}]}";
     Spec spec;
-    assert(spec_parse_string(json, &spec) != 0);
+    int rc = spec_parse_string(json, &spec);
+    assert(rc != 0);
     printf("PASS: missing sql\n");
 }
 
 static void test_missing_layers(void) {
     const char *json = "{\"sql\":\"SELECT 1\"}";
     Spec spec;
-    assert(spec_parse_string(json, &spec) != 0);
+    int rc = spec_parse_string(json, &spec);
+    assert(rc != 0);
     printf("PASS: missing layers\n");
 }
 
 static void test_missing_mark(void) {
     const char *json = "{\"sql\":\"SELECT 1\",\"layers\":[{}]}";
     Spec spec;
-    assert(spec_parse_string(json, &spec) != 0);
+    int rc = spec_parse_string(json, &spec);
+    assert(rc != 0);
     printf("PASS: missing mark\n");
 }
 
 static void test_invalid_json(void) {
     Spec spec;
-    assert(spec_parse_string("not json", &spec) != 0);
+    int rc = spec_parse_string("not json", &spec);
+    assert(rc != 0);
     printf("PASS: invalid json\n");
 }
 
 static void test_default_scheme(void) {
     const char *json = "{\"sql\":\"SELECT 1\",\"layers\":[{\"mark\":\"line\"}]}";
     Spec spec;
-    assert(spec_parse_string(json, &spec) == 0);
+    int rc = spec_parse_string(json, &spec);
+    assert(rc == 0);
     assert(spec.layers[0].scheme == COLORMAP_VIRIDIS);
     spec_free(&spec);
     printf("PASS: default scheme\n");
@@ -80,7 +87,8 @@ static void test_default_scheme(void) {
 static void test_point_mark(void) {
     const char *json = "{\"sql\":\"SELECT 1\",\"layers\":[{\"mark\":\"point\"}]}";
     Spec spec;
-    assert(spec_parse_string(json, &spec) == 0);
+    int rc = spec_parse_string(json, &spec);
+    assert(rc == 0);
     assert(spec.layers[0].mark == MARK_POINT);
     spec_free(&spec);
     printf("PASS: point mark\n");
