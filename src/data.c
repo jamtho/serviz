@@ -6,6 +6,7 @@
 #include <float.h>
 #include <math.h>
 #include <ctype.h>
+#include <time.h>
 
 /* Column name priority lists for inference */
 static const char *x_names[] = {"x", "time", "timestamp", "ts", "date", "datetime", "t", NULL};
@@ -283,6 +284,9 @@ int data_load(const char *sql, DataSet *out) {
 
     fprintf(stderr, "Executing query: %s\n", sql);
 
+    struct timespec t0, t1;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+
     duckdb_result result;
     if (duckdb_query(con, sql, &result) != DuckDBSuccess) {
         const char *err = duckdb_result_error(&result);
@@ -309,6 +313,10 @@ int data_load(const char *sql, DataSet *out) {
         }
         free(wrapped);
     }
+
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    double query_secs = (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9;
+    fprintf(stderr, "Query executed in %.3f s\n", query_secs);
 
     idx_t col_count = duckdb_column_count(&result);
 
