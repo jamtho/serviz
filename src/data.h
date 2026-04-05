@@ -35,9 +35,18 @@ typedef struct {
 
     ExtraColumn extras[MAX_EXTRA_COLS];
     int extra_count;
+
+    /* OHLC data (populated by data_load_ohlc, NULL otherwise) */
+    double *open;
+    double *high;
+    double *low;
+    double *close;
+    bool is_ohlc;
 } DataSet;
 
 int data_load(const char *sql, DataSet *out);
+int data_load_ohlc(const char *user_sql, const char *bucket, DataSet *out);
+int data_load_histogram(const char *user_sql, double bucket_width, DataSet *out);
 void data_free(DataSet *ds);
 
 #endif /* DATA_H */

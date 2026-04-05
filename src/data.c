@@ -654,10 +654,188 @@ int data_load(const char *sql, DataSet *out) {
     return 0;
 }
 
+/* Probe a SQL query to discover column names and types without loading data.
+ * Returns 0 on success, fills x_col_name, y_col_name, and x_is_time. */
+static int probe_columns(const char *user_sql,
+                          char *x_col_name, int x_col_name_size,
+                          char *y_col_name, int y_col_name_size,
+                          bool *x_is_time) {
+    duckdb_database db;
+    duckdb_connection con;
+
+    if (duckdb_open(NULL, &db) != DuckDBSuccess) return -1;
+    if (duckdb_connect(db, &con) != DuckDBSuccess) {
+        duckdb_close(&db);
+        return -1;
+    }
+
+    {
+        duckdb_result res;
+        duckdb_query(con, "SET autoinstall_known_extensions=1; SET autoload_known_extensions=1;", &res);
+        duckdb_destroy_result(&res);
+    }
+
+    char *probe_sql = (char *)malloc(strlen(user_sql) + 64);
+    sprintf(probe_sql, "SELECT * FROM (%s) AS _t LIMIT 0", user_sql);
+
+    duckdb_result result;
+    if (duckdb_query(con, probe_sql, &result) != DuckDBSuccess) {
+        free(probe_sql);
+        duckdb_destroy_result(&result);
+        duckdb_disconnect(&con);
+        duckdb_close(&db);
+        return -1;
+    }
+    free(probe_sql);
+
+    idx_t col_count = duckdb_column_count(&result);
+    int x_col = find_column_from_list(&result, x_names, col_count);
+    int y_col = find_column_from_list(&result, y_names, col_count);
+
+    if (x_col < 0 && col_count >= 1) x_col = 0;
+    if (y_col < 0 && col_count >= 2) y_col = (x_col == 0) ? 1 : 0;
+
+    if (x_col < 0 || y_col < 0) {
+        duckdb_destroy_result(&result);
+        duckdb_disconnect(&con);
+        duckdb_close(&db);
+        return -1;
+    }
+
+    snprintf(x_col_name, x_col_name_size, "%s", duckdb_column_name(&result, x_col));
+    snprintf(y_col_name, y_col_name_size, "%s", duckdb_column_name(&result, y_col));
+    *x_is_time = is_time_type(duckdb_column_type(&result, x_col)) ? true : false;
+
+    duckdb_destroy_result(&result);
+    duckdb_disconnect(&con);
+    duckdb_close(&db);
+    return 0;
+}
+
+int data_load_ohlc(const char *user_sql, const char *bucket, DataSet *out) {
+    char x_col[128], y_col[128];
+    bool x_is_time;
+
+    if (probe_columns(user_sql, x_col, sizeof(x_col), y_col, sizeof(y_col), &x_is_time) != 0) {
+        fprintf(stderr, "Error: failed to probe columns for OHLC aggregation\n");
+        return -1;
+    }
+
+    /* Build aggregation SQL */
+    size_t sql_size = strlen(user_sql) + 512;
+    char *agg_sql = (char *)malloc(sql_size);
+
+    if (x_is_time) {
+        snprintf(agg_sql, sql_size,
+            "SELECT date_trunc('%s', \"%s\") AS x, "
+            "first(\"%s\" ORDER BY \"%s\") AS y, "
+            "first(\"%s\" ORDER BY \"%s\") AS open, "
+            "max(\"%s\") AS high, "
+            "min(\"%s\") AS low, "
+            "last(\"%s\" ORDER BY \"%s\") AS close "
+            "FROM (%s) AS _raw GROUP BY 1 ORDER BY 1",
+            bucket, x_col,
+            y_col, x_col,
+            y_col, x_col,
+            y_col,
+            y_col,
+            y_col, x_col,
+            user_sql);
+    } else {
+        snprintf(agg_sql, sql_size,
+            "SELECT floor(\"%s\" / %s) * %s AS x, "
+            "first(\"%s\" ORDER BY \"%s\") AS y, "
+            "first(\"%s\" ORDER BY \"%s\") AS open, "
+            "max(\"%s\") AS high, "
+            "min(\"%s\") AS low, "
+            "last(\"%s\" ORDER BY \"%s\") AS close "
+            "FROM (%s) AS _raw GROUP BY 1 ORDER BY 1",
+            x_col, bucket, bucket,
+            y_col, x_col,
+            y_col, x_col,
+            y_col,
+            y_col,
+            y_col, x_col,
+            user_sql);
+    }
+
+    fprintf(stderr, "OHLC aggregation SQL: %s\n", agg_sql);
+
+    int rc = data_load(agg_sql, out);
+    free(agg_sql);
+
+    if (rc != 0) return rc;
+
+    /* The open/high/low/close columns are in extras. Move them to dedicated arrays. */
+    out->is_ohlc = true;
+    out->open = (double *)malloc(out->count * sizeof(double));
+    out->high = (double *)malloc(out->count * sizeof(double));
+    out->low = (double *)malloc(out->count * sizeof(double));
+    out->close = (double *)malloc(out->count * sizeof(double));
+
+    /* Find the OHLC extra columns and parse their string values */
+    int open_idx = -1, high_idx = -1, low_idx = -1, close_idx = -1;
+    for (int e = 0; e < out->extra_count; e++) {
+        if (strcmp(out->extras[e].name, "open") == 0) open_idx = e;
+        else if (strcmp(out->extras[e].name, "high") == 0) high_idx = e;
+        else if (strcmp(out->extras[e].name, "low") == 0) low_idx = e;
+        else if (strcmp(out->extras[e].name, "close") == 0) close_idx = e;
+    }
+
+    for (uint32_t i = 0; i < out->count; i++) {
+        out->open[i] = (open_idx >= 0) ? atof(out->extras[open_idx].values[i]) : out->y[i];
+        out->high[i] = (high_idx >= 0) ? atof(out->extras[high_idx].values[i]) : out->y[i];
+        out->low[i] = (low_idx >= 0) ? atof(out->extras[low_idx].values[i]) : out->y[i];
+        out->close[i] = (close_idx >= 0) ? atof(out->extras[close_idx].values[i]) : out->y[i];
+    }
+
+    /* Update y bounds to cover full OHLC range */
+    out->y_min = out->low[0];
+    out->y_max = out->high[0];
+    for (uint32_t i = 1; i < out->count; i++) {
+        if (out->low[i] < out->y_min) out->y_min = out->low[i];
+        if (out->high[i] > out->y_max) out->y_max = out->high[i];
+    }
+
+    return 0;
+}
+
+int data_load_histogram(const char *user_sql, double bucket_width, DataSet *out) {
+    char x_col[128], y_col[128];
+    bool x_is_time;
+
+    if (probe_columns(user_sql, x_col, sizeof(x_col), y_col, sizeof(y_col), &x_is_time) != 0) {
+        fprintf(stderr, "Error: failed to probe columns for histogram\n");
+        return -1;
+    }
+
+    size_t sql_size = strlen(user_sql) + 256;
+    char *hist_sql = (char *)malloc(sql_size);
+    snprintf(hist_sql, sql_size,
+        "SELECT floor(\"%s\" / %g) * %g AS x, "
+        "count(*) AS y "
+        "FROM (%s) AS _raw GROUP BY 1 ORDER BY 1",
+        y_col, bucket_width, bucket_width, user_sql);
+
+    fprintf(stderr, "Histogram SQL: %s\n", hist_sql);
+
+    int rc = data_load(hist_sql, out);
+    free(hist_sql);
+
+    /* Histogram x is never time */
+    if (rc == 0) out->x_is_time = false;
+
+    return rc;
+}
+
 void data_free(DataSet *ds) {
     free(ds->x);
     free(ds->y);
     free(ds->color_values);
+    free(ds->open);
+    free(ds->high);
+    free(ds->low);
+    free(ds->close);
     if (ds->series) {
         for (int i = 0; i < ds->series_count; i++)
             free(ds->series[i].name);

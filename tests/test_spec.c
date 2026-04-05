@@ -94,6 +94,55 @@ static void test_point_mark(void) {
     printf("PASS: point mark\n");
 }
 
+static void test_bar_mark(void) {
+    const char *json = "{\"sql\":\"SELECT 1\",\"layers\":[{\"mark\":\"bar\"}]}";
+    Spec spec;
+    int rc = spec_parse_string(json, &spec);
+    assert(rc == 0);
+    assert(spec.layers[0].mark == MARK_BAR);
+    assert(spec.layers[0].bucket == NULL);
+    spec_free(&spec);
+    printf("PASS: bar mark\n");
+}
+
+static void test_histogram_with_bucket(void) {
+    const char *json = "{\"sql\":\"SELECT 1\",\"layers\":[{\"mark\":\"histogram\",\"bucket\":5}]}";
+    Spec spec;
+    int rc = spec_parse_string(json, &spec);
+    assert(rc == 0);
+    assert(spec.layers[0].mark == MARK_HISTOGRAM);
+    assert(strcmp(spec.layers[0].bucket, "5") == 0);
+    spec_free(&spec);
+    printf("PASS: histogram with bucket\n");
+}
+
+static void test_candle_with_bucket(void) {
+    const char *json = "{\"sql\":\"SELECT 1\",\"layers\":[{\"mark\":\"candle\",\"bucket\":\"1 day\"}]}";
+    Spec spec;
+    int rc = spec_parse_string(json, &spec);
+    assert(rc == 0);
+    assert(spec.layers[0].mark == MARK_CANDLE);
+    assert(strcmp(spec.layers[0].bucket, "1 day") == 0);
+    spec_free(&spec);
+    printf("PASS: candle with bucket\n");
+}
+
+static void test_histogram_missing_bucket(void) {
+    const char *json = "{\"sql\":\"SELECT 1\",\"layers\":[{\"mark\":\"histogram\"}]}";
+    Spec spec;
+    int rc = spec_parse_string(json, &spec);
+    assert(rc != 0);
+    printf("PASS: histogram missing bucket\n");
+}
+
+static void test_candle_missing_bucket(void) {
+    const char *json = "{\"sql\":\"SELECT 1\",\"layers\":[{\"mark\":\"candle\"}]}";
+    Spec spec;
+    int rc = spec_parse_string(json, &spec);
+    assert(rc != 0);
+    printf("PASS: candle missing bucket\n");
+}
+
 int main(void) {
     test_minimal();
     test_full();
@@ -103,6 +152,11 @@ int main(void) {
     test_invalid_json();
     test_default_scheme();
     test_point_mark();
+    test_bar_mark();
+    test_histogram_with_bucket();
+    test_candle_with_bucket();
+    test_histogram_missing_bucket();
+    test_candle_missing_bucket();
     printf("All spec tests passed.\n");
     return 0;
 }

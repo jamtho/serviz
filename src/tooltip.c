@@ -129,14 +129,32 @@ void tooltip_draw(const HitResult *hit, const DataSet *ds,
     if (w > max_width) max_width = w;
     line_count++;
 
-    /* Y value */
-    snprintf(lines[line_count], sizeof(lines[0]), "y: %g", hit->data_y);
-    w = MeasureText(lines[line_count], font_size);
-    if (w > max_width) max_width = w;
-    line_count++;
+    /* Y value / OHLC values */
+    if (ds->is_ohlc && ds->open && ds->close) {
+        snprintf(lines[line_count], sizeof(lines[0]), "O: %g  H: %g",
+                 ds->open[hit->point_idx], ds->high[hit->point_idx]);
+        w = MeasureText(lines[line_count], font_size);
+        if (w > max_width) max_width = w;
+        line_count++;
+        snprintf(lines[line_count], sizeof(lines[0]), "L: %g  C: %g",
+                 ds->low[hit->point_idx], ds->close[hit->point_idx]);
+        w = MeasureText(lines[line_count], font_size);
+        if (w > max_width) max_width = w;
+        line_count++;
+    } else {
+        snprintf(lines[line_count], sizeof(lines[0]), "y: %g", hit->data_y);
+        w = MeasureText(lines[line_count], font_size);
+        if (w > max_width) max_width = w;
+        line_count++;
+    }
 
     /* Extra columns */
     for (int e = 0; e < ds->extra_count && line_count < MAX_EXTRA_COLS + 4; e++) {
+        /* Skip OHLC columns in extras since we already displayed them */
+        if (ds->is_ohlc && (strcmp(ds->extras[e].name, "open") == 0 ||
+            strcmp(ds->extras[e].name, "high") == 0 ||
+            strcmp(ds->extras[e].name, "low") == 0 ||
+            strcmp(ds->extras[e].name, "close") == 0)) continue;
         snprintf(lines[line_count], sizeof(lines[0]), "%s: %s",
                  ds->extras[e].name, ds->extras[e].values[hit->point_idx]);
         w = MeasureText(lines[line_count], font_size);

@@ -1,0 +1,5 @@
+{
+  "sql": "SELECT i AS x, (10 + sin(i * 0.3) * 8) AS y FROM range(30) t(i)",
+  "layers": [{"mark": "bar"}],
+  "title": "Bar Chart"
+}

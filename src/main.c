@@ -45,8 +45,13 @@ static void auto_fit_y(Viewport *vp, const DataSet *ds) {
         const Series *s = &ds->series[si];
         for (uint32_t i = s->start; i < s->start + s->count; i++) {
             if (ds->x[i] < vp->x_min || ds->x[i] > vp->x_max) continue;
-            if (ds->y[i] < y_lo) y_lo = ds->y[i];
-            if (ds->y[i] > y_hi) y_hi = ds->y[i];
+            if (ds->is_ohlc && ds->low && ds->high) {
+                if (ds->low[i] < y_lo) y_lo = ds->low[i];
+                if (ds->high[i] > y_hi) y_hi = ds->high[i];
+            } else {
+                if (ds->y[i] < y_lo) y_lo = ds->y[i];
+                if (ds->y[i] > y_hi) y_hi = ds->y[i];
+            }
         }
     }
     if (y_lo < y_hi) {
@@ -103,8 +108,21 @@ int main(int argc, char *argv[]) {
 
     fprintf(stderr, "Spec parsed: %d layers\n", spec.layer_count);
 
+    /* Load data based on the first layer's mark type */
     DataSet ds;
-    if (data_load(spec.sql, &ds) != 0) {
+    const char *load_sql = spec.sql;
+    int load_rc;
+
+    if (spec.layer_count > 0 && spec.layers[0].mark == MARK_CANDLE) {
+        load_rc = data_load_ohlc(load_sql, spec.layers[0].bucket, &ds);
+    } else if (spec.layer_count > 0 && spec.layers[0].mark == MARK_HISTOGRAM) {
+        double bw = atof(spec.layers[0].bucket);
+        load_rc = data_load_histogram(load_sql, bw, &ds);
+    } else {
+        load_rc = data_load(load_sql, &ds);
+    }
+
+    if (load_rc != 0) {
         fprintf(stderr, "Error: failed to load data\n");
         spec_free(&spec);
         return 1;

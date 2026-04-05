@@ -1,0 +1,5 @@
+{
+  "sql": "SELECT i AS x, random() * 100 AS y FROM range(10000) t(i)",
+  "layers": [{"mark": "histogram", "bucket": 5}],
+  "title": "Value Distribution"
+}

@@ -119,6 +119,40 @@ static void test_case_insensitive_cols(void) {
     printf("PASS: case insensitive cols\n");
 }
 
+static void test_histogram(void) {
+    DataSet ds;
+    /* 10 values: 0,1,2,...,9. Bucket width 5 -> two bins: [0,5) and [5,10) */
+    int rc = data_load_histogram("SELECT i AS x, i AS y FROM range(10) t(i)", 5.0, &ds);
+    assert(rc == 0);
+    assert(ds.count == 2);
+    assert(!ds.x_is_time);
+    /* Bins at 0 and 5 */
+    assert(ds.x[0] == 0.0);
+    assert(ds.x[1] == 5.0);
+    /* 5 values in each bin */
+    assert(ds.y[0] == 5.0);
+    assert(ds.y[1] == 5.0);
+    data_free(&ds);
+    printf("PASS: histogram\n");
+}
+
+static void test_ohlc_numeric(void) {
+    DataSet ds;
+    /* 20 points, bucket width 10. Should produce 2 candles. */
+    int rc = data_load_ohlc(
+        "SELECT i AS x, (10 + i % 5) AS y FROM range(20) t(i)",
+        "10", &ds);
+    assert(rc == 0);
+    assert(ds.is_ohlc);
+    assert(ds.open != NULL);
+    assert(ds.high != NULL);
+    assert(ds.low != NULL);
+    assert(ds.close != NULL);
+    assert(ds.count == 2);
+    data_free(&ds);
+    printf("PASS: ohlc numeric\n");
+}
+
 int main(void) {
     test_basic_xy();
     test_column_inference_value();
@@ -130,6 +164,8 @@ int main(void) {
     test_bad_sql();
     test_sorted_by_x();
     test_case_insensitive_cols();
+    test_histogram();
+    test_ohlc_numeric();
     printf("All data tests passed.\n");
     return 0;
 }

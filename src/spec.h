@@ -7,7 +7,10 @@
 
 typedef enum {
     MARK_LINE = 0,
-    MARK_POINT
+    MARK_POINT,
+    MARK_BAR,
+    MARK_HISTOGRAM,
+    MARK_CANDLE
 } MarkType;
 
 typedef struct {
@@ -16,6 +19,7 @@ typedef struct {
     int point_size;
     char *name;
     char *sql;
+    char *bucket;   /* e.g. "1 day", "4 hour", or "2.5" for numeric */
 } Layer;
 
 typedef struct {

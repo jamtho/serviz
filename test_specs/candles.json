@@ -1,0 +1,5 @@
+{
+  "sql": "SELECT TIMESTAMP '2024-01-01' + INTERVAL (i) HOUR AS time, 100 + sin(i * 0.05) * 20 + random() * 5 AS price FROM range(720) t(i)",
+  "layers": [{"mark": "candle", "bucket": "1 day"}],
+  "title": "Daily OHLC (30 days)"
+}

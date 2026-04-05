@@ -33,6 +33,9 @@ static int read_file(const char *path, char **out_buf) {
 
 static MarkType parse_mark(const char *s) {
     if (strcmp(s, "point") == 0) return MARK_POINT;
+    if (strcmp(s, "bar") == 0) return MARK_BAR;
+    if (strcmp(s, "histogram") == 0) return MARK_HISTOGRAM;
+    if (strcmp(s, "candle") == 0) return MARK_CANDLE;
     return MARK_LINE;
 }
 
@@ -102,6 +105,26 @@ int spec_parse_string(const char *json, Spec *out) {
         if (layer_sql && cJSON_IsString(layer_sql)) {
             l->sql = str_dup(layer_sql->valuestring);
         }
+
+        /* bucket (optional for bar, required for histogram/candle) */
+        cJSON *bucket = cJSON_GetObjectItemCaseSensitive(layer, "bucket");
+        if (bucket) {
+            if (cJSON_IsString(bucket)) {
+                l->bucket = str_dup(bucket->valuestring);
+            } else if (cJSON_IsNumber(bucket)) {
+                char buf[64];
+                snprintf(buf, sizeof(buf), "%g", bucket->valuedouble);
+                l->bucket = str_dup(buf);
+            }
+        }
+
+        if ((l->mark == MARK_HISTOGRAM || l->mark == MARK_CANDLE) && !l->bucket) {
+            fprintf(stderr, "Error: layer %d '%s' mark requires 'bucket'\n",
+                    i, mark->valuestring);
+            spec_free(out);
+            cJSON_Delete(root);
+            return -1;
+        }
     }
 
     cJSON_Delete(root);
@@ -122,6 +145,7 @@ void spec_free(Spec *spec) {
     for (int i = 0; i < spec->layer_count; i++) {
         free(spec->layers[i].name);
         free(spec->layers[i].sql);
+        free(spec->layers[i].bucket);
     }
     memset(spec, 0, sizeof(Spec));
 }

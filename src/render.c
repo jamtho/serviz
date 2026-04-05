@@ -77,6 +77,33 @@ static Color color_from_rgb(ColorRGB rgb) {
     return c;
 }
 
+static void fill_rect(int x0, int y0, int x1, int y1, Color c) {
+    if (x0 > x1) { int t = x0; x0 = x1; x1 = t; }
+    if (y0 > y1) { int t = y0; y0 = y1; y1 = t; }
+    for (int py = y0; py <= y1; py++) {
+        for (int px = x0; px <= x1; px++) {
+            plot_pixel(px, py, c);
+        }
+    }
+}
+
+/* Compute bar width in pixels from the data spacing */
+static int compute_bar_width(const DataSet *ds, const Series *s,
+                              const Viewport *vp, const ChartArea *ca) {
+    if (s->count < 2) return 20;
+    /* Find minimum spacing between consecutive x points */
+    double min_gap = 1e300;
+    for (uint32_t i = s->start + 1; i < s->start + s->count; i++) {
+        double gap = ds->x[i] - ds->x[i - 1];
+        if (gap > 0 && gap < min_gap) min_gap = gap;
+    }
+    double px_gap = min_gap / (vp->x_max - vp->x_min) * ca->width;
+    int w = (int)(px_gap * 0.8);
+    if (w < 1) w = 1;
+    if (w > 60) w = 60;
+    return w;
+}
+
 void render_rasterise(const Spec *spec, const DataSet *ds,
                       const Viewport *vp, const ChartArea *ca,
                       const Color *palette_colors, int palette_count) {
@@ -129,6 +156,46 @@ void render_rasterise(const Spec *spec, const DataSet *ds,
                     }
                     prev_px = px;
                     prev_py = py;
+                }
+            } else if (layer->mark == MARK_BAR || layer->mark == MARK_HISTOGRAM) {
+                int bar_w = compute_bar_width(ds, series, vp, ca);
+                int half_w = bar_w / 2;
+                /* Baseline at y=0 if visible, otherwise bottom of viewport */
+                int baseline_py = (int)data_to_pixel_y(0.0, vp, ca);
+
+                for (uint32_t i = series->start; i < series->start + series->count; i++) {
+                    int px = (int)data_to_pixel_x(ds->x[i], vp, ca);
+                    int py = (int)data_to_pixel_y(ds->y[i], vp, ca);
+
+                    Color c;
+                    if (has_color) {
+                        float t = (float)((ds->color_values[i] - ds->color_min) / color_range);
+                        c = color_from_rgb(colormap_sample(cmap, t));
+                    } else {
+                        c = series_color;
+                    }
+                    fill_rect(px - half_w, py, px + half_w, baseline_py, c);
+                }
+            } else if (layer->mark == MARK_CANDLE && ds->is_ohlc) {
+                int bar_w = compute_bar_width(ds, series, vp, ca);
+                int half_w = bar_w / 2;
+                Color green = {50, 200, 50, 255};
+                Color red = {220, 50, 50, 255};
+
+                for (uint32_t i = series->start; i < series->start + series->count; i++) {
+                    int px = (int)data_to_pixel_x(ds->x[i], vp, ca);
+                    int py_high = (int)data_to_pixel_y(ds->high[i], vp, ca);
+                    int py_low = (int)data_to_pixel_y(ds->low[i], vp, ca);
+                    int py_open = (int)data_to_pixel_y(ds->open[i], vp, ca);
+                    int py_close = (int)data_to_pixel_y(ds->close[i], vp, ca);
+
+                    Color c = (ds->close[i] >= ds->open[i]) ? green : red;
+
+                    /* Wick: thin vertical line from high to low */
+                    draw_line_bresenham(px, py_high, px, py_low, c);
+
+                    /* Body: filled rectangle from open to close */
+                    fill_rect(px - half_w, py_open, px + half_w, py_close, c);
                 }
             }
         }
