@@ -80,13 +80,18 @@ first (TDD-style) before fixes were applied.
     project, confusing copy-paste. *Fixed: now mentions download_deps.py.*
 
 15. **`download_deps.py`** — no error handling, no checksum verification,
-    no retry. *Not yet addressed.*
+    no retry. *Fixed: now has retry with backoff, HTTP error checking,
+    timeout, and `--force` flag. No checksum verification (upstream
+    doesn't publish them).*
 
 16. **`agents.md`** references Python/pytest conventions but there's no
-    Python test code — boilerplate that doesn't apply. *Not yet addressed.*
+    Python test code — boilerplate that doesn't apply. *Fixed: removed
+    Python/pytest references, added note about `-UNDEBUG` test flag and
+    `download_deps.py`.*
 
 17. **Screenshot uses a magic 300-frame wait.** Fragile and undocumented.
-    *Not yet addressed.*
+    *Fixed: replaced with a named constant `SCREENSHOT_DELAY_FRAMES`
+    (10 frames ≈ 0.17s, enough for the render to settle).*
 
 18. **`assert()` in Release builds is a no-op.** All test files use
     `assert()` as their assertion mechanism, but `-DNDEBUG` is defined in
@@ -117,6 +122,3 @@ first (TDD-style) before fixes were applied.
 - Per-layer data loading + display layer `name` in legend (#1)
 - Full render/tooltip tests (#2)
 - CI, LICENSE, install target (#3)
-- `download_deps.py` robustness (#15)
-- `agents.md` cleanup (#16)
-- Screenshot wait robustness (#17)

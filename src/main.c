@@ -19,6 +19,7 @@
 #define MARGIN_RIGHT  20
 #define MARGIN_TOP    40
 #define MARGIN_BOTTOM 50
+#define SCREENSHOT_DELAY_FRAMES 10
 
 static char *read_stdin(void) {
     size_t cap = 4096;
@@ -269,7 +270,7 @@ int main(int argc, char *argv[]) {
         EndDrawing();
 
         frame_count++;
-        if (screenshot_path && frame_count == 300) {
+        if (screenshot_path && frame_count == SCREENSHOT_DELAY_FRAMES) {
             TakeScreenshot(screenshot_path);
             fprintf(stderr, "Screenshot saved to %s\n", screenshot_path);
             break;
