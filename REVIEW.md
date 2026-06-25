@@ -62,8 +62,9 @@ first (TDD-style) before fixes were applied.
     a `LIMIT 0` probe. *Not yet fixed — tracked as known limitation.*
 
 11. **Bar baseline comment lies.** `render.c` comment said "Baseline at y=0
-    if visible, otherwise bottom of viewport" but code always uses y=0.
-    *Not yet fixed — tracked as known limitation.*
+    if visible, otherwise bottom of viewport" but code always used y=0.
+    *Fixed: baseline now clamps to the viewport edge when y=0 is outside
+    the visible range.*
 
 ## Minor / Quality
 
@@ -115,7 +116,6 @@ first (TDD-style) before fixes were applied.
 - Full render/tooltip tests (#2)
 - CI, LICENSE, install target (#3)
 - DECIMAL double-execution optimisation (#10)
-- Bar baseline fix (#11)
 - `download_deps.py` robustness (#15)
 - `agents.md` cleanup (#16)
 - Screenshot wait robustness (#17)

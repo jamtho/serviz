@@ -160,8 +160,11 @@ void render_rasterise(const Spec *spec, const DataSet *ds,
             } else if (layer->mark == MARK_BAR || layer->mark == MARK_HISTOGRAM) {
                 int bar_w = compute_bar_width(ds, series, vp, ca);
                 int half_w = bar_w / 2;
-                /* Baseline at y=0 if visible, otherwise bottom of viewport */
-                int baseline_py = (int)data_to_pixel_y(0.0, vp, ca);
+                /* Baseline at y=0 if visible, otherwise clamp to viewport edge */
+                double baseline_val = 0.0;
+                if (0.0 < vp->y_min) baseline_val = vp->y_min;
+                else if (0.0 > vp->y_max) baseline_val = vp->y_max;
+                int baseline_py = (int)data_to_pixel_y(baseline_val, vp, ca);
 
                 for (uint32_t i = series->start; i < series->start + series->count; i++) {
                     int px = (int)data_to_pixel_x(ds->x[i], vp, ca);
