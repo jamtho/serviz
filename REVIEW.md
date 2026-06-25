@@ -59,7 +59,9 @@ first (TDD-style) before fixes were applied.
 
 10. **Query double-execution on DECIMAL columns.** Ran the full query,
     detected DECIMAL, then re-ran the wrapped query. First run should be
-    a `LIMIT 0` probe. *Not yet fixed — tracked as known limitation.*
+    a `LIMIT 0` probe. *Fixed: now probes with `SELECT * FROM (...) LIMIT 0`
+    to detect DECIMAL columns cheaply, then executes the wrapped (or
+    original) query exactly once.*
 
 11. **Bar baseline comment lies.** `render.c` comment said "Baseline at y=0
     if visible, otherwise bottom of viewport" but code always used y=0.
@@ -115,7 +117,6 @@ first (TDD-style) before fixes were applied.
 - Per-layer data loading + display layer `name` in legend (#1)
 - Full render/tooltip tests (#2)
 - CI, LICENSE, install target (#3)
-- DECIMAL double-execution optimisation (#10)
 - `download_deps.py` robustness (#15)
 - `agents.md` cleanup (#16)
 - Screenshot wait robustness (#17)

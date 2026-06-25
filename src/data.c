@@ -287,32 +287,38 @@ int data_load(const char *sql, DataSet *out) {
     struct timespec t0, t1;
     clock_gettime(CLOCK_MONOTONIC, &t0);
 
+    /* Probe column types with LIMIT 0 to detect DECIMAL columns without
+     * executing the full query. If DECIMALs are found, wrap with casts. */
+    char *wrapped = NULL;
+    {
+        char *probe_sql = (char *)malloc(strlen(sql) + 32);
+        if (probe_sql) {
+            snprintf(probe_sql, strlen(sql) + 32, "SELECT * FROM (%s) AS _t LIMIT 0", sql);
+            duckdb_result probe;
+            if (duckdb_query(con, probe_sql, &probe) == DuckDBSuccess) {
+                wrapped = wrap_decimal_casts(sql, &probe);
+                duckdb_destroy_result(&probe);
+            }
+            free(probe_sql);
+        }
+    }
+
+    const char *exec_sql = wrapped ? wrapped : sql;
+    if (wrapped) {
+        fprintf(stderr, "Executing with DECIMAL casts: %s\n", wrapped);
+    }
+
     duckdb_result result;
-    if (duckdb_query(con, sql, &result) != DuckDBSuccess) {
+    if (duckdb_query(con, exec_sql, &result) != DuckDBSuccess) {
         const char *err = duckdb_result_error(&result);
         fprintf(stderr, "Error: DuckDB query failed: %s\n", err ? err : "unknown error");
+        free(wrapped);
         duckdb_destroy_result(&result);
         duckdb_disconnect(&con);
         duckdb_close(&db);
         return -1;
     }
-
-    /* Handle DECIMAL columns */
-    char *wrapped = wrap_decimal_casts(sql, &result);
-    if (wrapped) {
-        duckdb_destroy_result(&result);
-        fprintf(stderr, "Re-executing with DECIMAL casts: %s\n", wrapped);
-        if (duckdb_query(con, wrapped, &result) != DuckDBSuccess) {
-            const char *err = duckdb_result_error(&result);
-            fprintf(stderr, "Error: DuckDB query failed: %s\n", err ? err : "unknown error");
-            free(wrapped);
-            duckdb_destroy_result(&result);
-            duckdb_disconnect(&con);
-            duckdb_close(&db);
-            return -1;
-        }
-        free(wrapped);
-    }
+    free(wrapped);
 
     clock_gettime(CLOCK_MONOTONIC, &t1);
     double query_secs = (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9;
