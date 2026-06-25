@@ -2,3 +2,4 @@ build/
 build_debug/
 third_party/duckdb/
 .cache/
+__pycache__/

@@ -104,24 +104,26 @@ static int compute_bar_width(const DataSet *ds, const Series *s,
     return w;
 }
 
-void render_rasterise(const Spec *spec, const DataSet *ds,
+void render_rasterise(const Spec *spec, const DataSet *datasets,
                       const Viewport *vp, const ChartArea *ca,
                       const Color *palette_colors, int palette_count) {
-    if (!pixel_buffer || !ds || ds->count == 0) return;
+    if (!pixel_buffer) return;
 
     memset(pixel_buffer, 0, buf_width * buf_height * sizeof(Color));
 
-    double color_range = ds->color_max - ds->color_min;
-    if (color_range == 0.0) color_range = 1.0;
-
     for (int li = 0; li < spec->layer_count; li++) {
         const Layer *layer = &spec->layers[li];
+        const DataSet *ds = &datasets[li];
+        if (!ds || ds->count == 0) continue;
+
         ColormapType cmap = layer->scheme;
         bool has_color = ds->has_color && ds->color_values != NULL;
+        double color_range = ds->color_max - ds->color_min;
+        if (color_range == 0.0) color_range = 1.0;
 
         for (int si = 0; si < ds->series_count; si++) {
             const Series *series = &ds->series[si];
-            Color series_color = palette_colors[si % palette_count];
+            Color series_color = palette_colors[(li + si) % palette_count];
 
             if (layer->mark == MARK_POINT) {
                 int pt_size = layer->point_size;

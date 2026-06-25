@@ -41,18 +41,22 @@ static char *read_stdin(void) {
     return buf;
 }
 
-static void auto_fit_y(Viewport *vp, const DataSet *ds) {
+static void auto_fit_y(Viewport *vp, const DataSet *datasets, int count) {
     double y_lo = DBL_MAX, y_hi = -DBL_MAX;
-    for (int si = 0; si < ds->series_count; si++) {
-        const Series *s = &ds->series[si];
-        for (uint32_t i = s->start; i < s->start + s->count; i++) {
-            if (ds->x[i] < vp->x_min || ds->x[i] > vp->x_max) continue;
-            if (ds->is_ohlc && ds->low && ds->high) {
-                if (ds->low[i] < y_lo) y_lo = ds->low[i];
-                if (ds->high[i] > y_hi) y_hi = ds->high[i];
-            } else {
-                if (ds->y[i] < y_lo) y_lo = ds->y[i];
-                if (ds->y[i] > y_hi) y_hi = ds->y[i];
+    for (int di = 0; di < count; di++) {
+        const DataSet *ds = &datasets[di];
+        if (ds->count == 0) continue;
+        for (int si = 0; si < ds->series_count; si++) {
+            const Series *s = &ds->series[si];
+            for (uint32_t i = s->start; i < s->start + s->count; i++) {
+                if (ds->x[i] < vp->x_min || ds->x[i] > vp->x_max) continue;
+                if (ds->is_ohlc && ds->low && ds->high) {
+                    if (ds->low[i] < y_lo) y_lo = ds->low[i];
+                    if (ds->high[i] > y_hi) y_hi = ds->high[i];
+                } else {
+                    if (ds->y[i] < y_lo) y_lo = ds->y[i];
+                    if (ds->y[i] > y_hi) y_hi = ds->y[i];
+                }
             }
         }
     }
@@ -110,42 +114,67 @@ int main(int argc, char *argv[]) {
 
     fprintf(stderr, "Spec parsed: %d layers\n", spec.layer_count);
 
-    /* Load data based on the first layer's mark type */
-    DataSet ds;
-    const char *load_sql = spec.sql;
-    int load_rc;
+    /* Load one dataset per layer */
+    DataSet datasets[MAX_LAYERS];
+    int loaded_count = 0;
 
-    if (spec.layer_count > 0 && spec.layers[0].mark == MARK_CANDLE) {
-        load_rc = data_load_ohlc(load_sql, spec.layers[0].bucket, &ds);
-    } else if (spec.layer_count > 0 && spec.layers[0].mark == MARK_HISTOGRAM) {
-        double bw = atof(spec.layers[0].bucket);
-        load_rc = data_load_histogram(load_sql, bw, &ds);
-    } else {
-        load_rc = data_load(load_sql, &ds);
+    for (int i = 0; i < spec.layer_count; i++) {
+        const Layer *layer = &spec.layers[i];
+        int rc = data_load_for_layer(layer->sql, spec.sql,
+                                     (int)layer->mark, layer->bucket,
+                                     &datasets[i]);
+        if (rc != 0) {
+            fprintf(stderr, "Error: failed to load data for layer %d\n", i);
+            for (int j = 0; j < i; j++) data_free(&datasets[j]);
+            spec_free(&spec);
+            return 1;
+        }
+        if (datasets[i].count == 0) {
+            fprintf(stderr, "Warning: layer %d returned 0 rows\n", i);
+        }
+        loaded_count++;
     }
 
-    if (load_rc != 0) {
-        fprintf(stderr, "Error: failed to load data\n");
+    if (loaded_count == 0) {
+        fprintf(stderr, "Error: no layers loaded\n");
         spec_free(&spec);
         return 1;
     }
 
-    if (ds.count == 0) {
+    /* Check at least one layer has data */
+    int has_data = 0;
+    for (int i = 0; i < loaded_count; i++) {
+        if (datasets[i].count > 0) { has_data = 1; break; }
+    }
+    if (!has_data) {
         fprintf(stderr, "Error: no data rows loaded\n");
+        for (int i = 0; i < loaded_count; i++) data_free(&datasets[i]);
         spec_free(&spec);
         return 1;
     }
 
-    /* Initial viewport: fit to data extent with margin */
+    /* Compute viewport across all datasets */
     Viewport vp;
-    double x_margin = (ds.x_max - ds.x_min) * 0.05;
-    double y_margin = (ds.y_max - ds.y_min) * 0.05;
+    double x_min = datasets[0].x_min, x_max = datasets[0].x_max;
+    double y_min = datasets[0].y_min, y_max = datasets[0].y_max;
+    for (int i = 1; i < loaded_count; i++) {
+        if (datasets[i].count == 0) continue;
+        if (datasets[i].x_min < x_min) x_min = datasets[i].x_min;
+        if (datasets[i].x_max > x_max) x_max = datasets[i].x_max;
+        if (datasets[i].y_min < y_min) y_min = datasets[i].y_min;
+        if (datasets[i].y_max > y_max) y_max = datasets[i].y_max;
+    }
+    double x_margin = (x_max - x_min) * 0.05;
+    double y_margin = (y_max - y_min) * 0.05;
     if (x_margin == 0.0) x_margin = 1.0;
     if (y_margin == 0.0) y_margin = 1.0;
-    vp.x_min = ds.x_min - x_margin;
-    vp.x_max = ds.x_max + x_margin;
-    vp.y_min = ds.y_min - y_margin;
-    vp.y_max = ds.y_max + y_margin;
+    vp.x_min = x_min - x_margin;
+    vp.x_max = x_max + x_margin;
+    vp.y_min = y_min - y_margin;
+    vp.y_max = y_max + y_margin;
+
+    /* Use first dataset's x_is_time as representative */
+    bool x_is_time = datasets[0].x_is_time;
 
     /* Palette */
     const Color *palette = palette_get_default();
@@ -204,32 +233,28 @@ int main(int argc, char *argv[]) {
             vp.x_min = data_x - t * new_range;
             vp.x_max = data_x + (1.0 - t) * new_range;
 
-            auto_fit_y(&vp, &ds);
+            auto_fit_y(&vp, datasets, loaded_count);
             viewport_dirty = 1;
         }
 
         /* Reset viewport on 'R' */
         if (IsKeyPressed(KEY_R)) {
-            double xm = (ds.x_max - ds.x_min) * 0.05;
-            double ym = (ds.y_max - ds.y_min) * 0.05;
-            if (xm == 0.0) xm = 1.0;
-            if (ym == 0.0) ym = 1.0;
-            vp.x_min = ds.x_min - xm;
-            vp.x_max = ds.x_max + xm;
-            vp.y_min = ds.y_min - ym;
-            vp.y_max = ds.y_max + ym;
+            vp.x_min = x_min - x_margin;
+            vp.x_max = x_max + x_margin;
+            vp.y_min = y_min - y_margin;
+            vp.y_max = y_max + y_margin;
             viewport_dirty = 1;
         }
 
         /* Regenerate on dirty */
         if (viewport_dirty) {
-            if (ds.x_is_time) {
+            if (x_is_time) {
                 axes_generate_ticks_time(vp.x_min, vp.x_max, 8, &x_ticks);
             } else {
                 axes_generate_ticks_numeric(vp.x_min, vp.x_max, 8, &x_ticks);
             }
             axes_generate_ticks_numeric(vp.y_min, vp.y_max, 6, &y_ticks);
-            render_rasterise(&spec, &ds, &vp, &ca, palette, PALETTE_SIZE);
+            render_rasterise(&spec, datasets, &vp, &ca, palette, PALETTE_SIZE);
             viewport_dirty = 0;
         }
 
@@ -239,32 +264,58 @@ int main(int argc, char *argv[]) {
 
         axes_draw_grid(&x_ticks, &y_ticks, &vp, &ca);
         render_draw_overlay(&ca);
-        axes_draw_chrome(&x_ticks, &y_ticks, &vp, &ca, ds.x_is_time, spec.title);
+        axes_draw_chrome(&x_ticks, &y_ticks, &vp, &ca, x_is_time, spec.title);
 
-        /* Tooltip */
+        /* Tooltip: search across all datasets for the nearest point */
         Vector2 mouse = GetMousePosition();
         if (mouse.x >= ca.left && mouse.x <= ca.left + ca.width &&
             mouse.y >= ca.top && mouse.y <= ca.top + ca.height) {
-            HitResult hit = tooltip_hit_test(&ds, &vp, &ca,
-                                              (int)mouse.x, (int)mouse.y, 20);
-            tooltip_draw(&hit, &ds, ds.x_is_time, palette, PALETTE_SIZE, w, h);
+            HitResult best = {0};
+            double best_dist = 1e18;
+            for (int i = 0; i < loaded_count; i++) {
+                if (datasets[i].count == 0) continue;
+                HitResult hit = tooltip_hit_test(&datasets[i], &vp, &ca,
+                                                  (int)mouse.x, (int)mouse.y, 20);
+                if (hit.active) {
+                    double dx = hit.pixel_x - mouse.x;
+                    double dy = hit.pixel_y - mouse.y;
+                    double dist = dx * dx + dy * dy;
+                    if (dist < best_dist) {
+                        best_dist = dist;
+                        best = hit;
+                        best.series_idx = i; /* layer index for color */
+                    }
+                }
+            }
+            if (best.active) {
+                tooltip_draw(&best, &datasets[best.series_idx], x_is_time,
+                             palette, PALETTE_SIZE, w, h);
+            }
         }
 
         /* HUD */
         DrawFPS(10, 10);
+        uint32_t total_points = 0;
+        for (int i = 0; i < loaded_count; i++) total_points += datasets[i].count;
         char info[128];
-        snprintf(info, sizeof(info), "Points: %u  Series: %d", ds.count, ds.series_count);
+        snprintf(info, sizeof(info), "Points: %u  Layers: %d", total_points, loaded_count);
         DrawText(info, 10, 30, 14, GREEN);
 
-        /* Legend for multi-series */
-        if (ds.series_count > 1) {
-            int ly = 50;
-            for (int si = 0; si < ds.series_count && si < PALETTE_SIZE; si++) {
-                Color c = palette_color(si);
-                DrawRectangle(10, ly, 12, 12, c);
-                DrawText(ds.series[si].name, 26, ly, 14, (Color){200, 200, 200, 255});
-                ly += 18;
-            }
+        /* Legend: show layer names (if set) or series names */
+        int ly = 50;
+        int legend_entries = 0;
+        for (int i = 0; i < loaded_count && legend_entries < PALETTE_SIZE; i++) {
+            const DataSet *ds = &datasets[i];
+            if (ds->count == 0) continue;
+            const char *name = spec.layers[i].name;
+            if (!name && ds->series_count == 1) name = ds->series[0].name;
+            if (!name) continue;
+
+            Color c = palette_color(legend_entries);
+            DrawRectangle(10, ly, 12, 12, c);
+            DrawText(name, 26, ly, 14, (Color){200, 200, 200, 255});
+            ly += 18;
+            legend_entries++;
         }
 
         EndDrawing();
@@ -278,7 +329,7 @@ int main(int argc, char *argv[]) {
     }
 
     render_shutdown();
-    data_free(&ds);
+    for (int i = 0; i < loaded_count; i++) data_free(&datasets[i]);
     spec_free(&spec);
     CloseWindow();
 

@@ -877,3 +877,36 @@ void data_free(DataSet *ds) {
     }
     memset(ds, 0, sizeof(DataSet));
 }
+
+/* Mark type constants (must match spec.h MarkType enum) */
+#define DATA_MARK_LINE      0
+#define DATA_MARK_POINT     1
+#define DATA_MARK_BAR        2
+#define DATA_MARK_HISTOGRAM  3
+#define DATA_MARK_CANDLE     4
+
+int data_load_for_layer(const char *sql_override, const char *spec_sql,
+                        int mark, const char *bucket, DataSet *out) {
+    const char *sql = sql_override ? sql_override : spec_sql;
+    if (!sql) {
+        fprintf(stderr, "Error: no SQL for layer\n");
+        return -1;
+    }
+
+    if (mark == DATA_MARK_CANDLE) {
+        if (!bucket) {
+            fprintf(stderr, "Error: candle mark requires bucket\n");
+            return -1;
+        }
+        return data_load_ohlc(sql, bucket, out);
+    } else if (mark == DATA_MARK_HISTOGRAM) {
+        if (!bucket) {
+            fprintf(stderr, "Error: histogram mark requires bucket\n");
+            return -1;
+        }
+        double bw = atof(bucket);
+        return data_load_histogram(sql, bw, out);
+    }
+
+    return data_load(sql, out);
+}

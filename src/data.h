@@ -47,6 +47,13 @@ typedef struct {
 int data_load(const char *sql, DataSet *out);
 int data_load_ohlc(const char *user_sql, const char *bucket, DataSet *out);
 int data_load_histogram(const char *user_sql, double bucket_width, DataSet *out);
+
+/* Load data for a layer, dispatching based on mark type.
+ * For MARK_CANDLE/MARK_HISTOGRAM, uses the layer's bucket.
+ * sql_override takes precedence over spec_sql. */
+int data_load_for_layer(const char *sql_override, const char *spec_sql,
+                        int mark, const char *bucket, DataSet *out);
+
 void data_free(DataSet *ds);
 
 #endif /* DATA_H */

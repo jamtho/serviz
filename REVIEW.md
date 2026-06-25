@@ -10,7 +10,10 @@ first (TDD-style) before fixes were applied.
    renders every layer against the same `DataSet`. Layer `name` is never
    displayed (legend uses `ds.series[si].name`). Multi-layer specs just
    re-render the same data with different marks. README documents both as
-   features. *Not yet fixed — tracked as known limitation.*
+   features. *Fixed: each layer now loads its own `DataSet` (via
+   `data_load_for_layer`), `render_rasterise` accepts an array of datasets,
+   viewport spans all datasets, tooltip searches across all datasets, and
+   the legend shows layer `name` (or series name as fallback).*
 
 2. **No tests for `render.c` or `tooltip.c`.** 410 lines of rasterisation,
    hit-testing, and tooltip formatting with zero unit tests.
@@ -121,5 +124,4 @@ first (TDD-style) before fixes were applied.
 
 ## Not yet addressed (future work)
 
-- Per-layer data loading + display layer `name` in legend (#1)
 - Full render/tooltip tests (#2)

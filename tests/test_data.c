@@ -176,6 +176,39 @@ static void test_single_point(void) {
     printf("PASS: single point\n");
 }
 
+/* data_load_for_layer dispatches based on mark type. */
+static void test_load_for_layer_line(void) {
+    DataSet ds;
+    int rc = data_load_for_layer(NULL, "SELECT i AS x, i AS y FROM range(5) t(i)",
+                                  0, NULL, &ds); /* MARK_LINE = 0 */
+    assert(rc == 0);
+    assert(ds.count == 5);
+    data_free(&ds);
+    printf("PASS: load_for_layer line\n");
+}
+
+static void test_load_for_layer_override_sql(void) {
+    DataSet ds;
+    int rc = data_load_for_layer("SELECT i AS x, i*3.0 AS y FROM range(3) t(i)",
+                                  "SELECT 1 AS x, 1 AS y", 0, NULL, &ds);
+    assert(rc == 0);
+    assert(ds.count == 3);
+    assert(ds.y[0] == 0.0);
+    assert(ds.y[2] == 6.0);
+    data_free(&ds);
+    printf("PASS: load_for_layer override sql\n");
+}
+
+static void test_load_for_layer_histogram(void) {
+    DataSet ds;
+    int rc = data_load_for_layer(NULL, "SELECT i AS x, i AS y FROM range(10) t(i)",
+                                  3, "5", &ds); /* MARK_HISTOGRAM = 3 */
+    assert(rc == 0);
+    assert(ds.count == 2);
+    data_free(&ds);
+    printf("PASS: load_for_layer histogram\n");
+}
+
 int main(void) {
     test_basic_xy();
     test_column_inference_value();
@@ -191,6 +224,9 @@ int main(void) {
     test_ohlc_numeric();
     test_histogram_zero_bucket_rejected();
     test_single_point();
+    test_load_for_layer_line();
+    test_load_for_layer_override_sql();
+    test_load_for_layer_histogram();
     printf("All data tests passed.\n");
     return 0;
 }
