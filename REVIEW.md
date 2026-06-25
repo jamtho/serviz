@@ -20,7 +20,9 @@ first (TDD-style) before fixes were applied.
 
 3. **No CI, no `LICENSE`, no `install` target, no `--version`/`--help`.**
    Public GitHub repo with no license, no workflow, no install target.
-   *`--help`/`--version` now work. CI/license/install not yet added.*
+   *Fixed: MPL-2.0 license added, GitHub Actions CI workflow added
+   (`.github/workflows/ci.yml`), `cmake --install` target added.
+   `--help`/`--version` now work (fixed in earlier commit).*
 
 4. **Warning flags only on `serviz`, not on tests.** `CMakeLists.txt`
    applied `-Wall -Wextra -Wpedantic` only to the main target. *Fixed: now
@@ -121,4 +123,3 @@ first (TDD-style) before fixes were applied.
 
 - Per-layer data loading + display layer `name` in legend (#1)
 - Full render/tooltip tests (#2)
-- CI, LICENSE, install target (#3)

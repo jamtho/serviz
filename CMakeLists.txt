@@ -126,3 +126,8 @@ add_executable(test_tooltip tests/test_tooltip.c src/tooltip.c)
 target_include_directories(test_tooltip PRIVATE src)
 target_link_libraries(test_tooltip PRIVATE raylib serviz_warnings serviz_test_flags)
 add_test(NAME test_tooltip COMMAND test_tooltip)
+
+# ----- Install -----
+include(GNUInstallDirs)
+install(TARGETS serviz RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES README.md REVIEW.md LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
