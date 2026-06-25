@@ -91,14 +91,13 @@ first (TDD-style) before fixes were applied.
     assertions vanish and tests *pass regardless of whether checks hold* —
     they only `printf("PASS...")`. Discovered when enabling `-Wall` on
     tests triggered `-Wunused-variable` for the `int rc = ...; assert(rc)`
-    pattern. *Not yet fixed across existing tests; new tests added in this
-    pass have the same pattern for consistency. Recommend either building
-    tests in Debug/RelWithDebInfo, or switching to a test harness macro
-    that is not stripped under `NDEBUG`.* Confirmed: all tests pass in
-    Debug builds where `assert()` fires.
+    pattern. *Fixed: test targets now compile with `-UNDEBUG` (via
+    `serviz_test_flags` interface library) which re-enables `assert()` in
+    Release builds.*
 
 19. **`spec.c:read_file` ignores `fread` return value.** Flagged by
-    `-Wunused-result` when compiling with extra warnings. *Not yet fixed.*
+    `-Wunused-result` when compiling with extra warnings. *Fixed: now
+    uses the return value to NUL-terminate, and checks `ftell < 0`.*
 
 ## Test coverage added
 

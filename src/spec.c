@@ -20,13 +20,18 @@ static int read_file(const char *path, char **out_buf) {
     fseek(f, 0, SEEK_END);
     long len = ftell(f);
     fseek(f, 0, SEEK_SET);
+    if (len < 0) {
+        fprintf(stderr, "Error: cannot determine size of '%s'\n", path);
+        fclose(f);
+        return -1;
+    }
     *out_buf = (char *)malloc(len + 1);
     if (!*out_buf) {
         fclose(f);
         return -1;
     }
-    fread(*out_buf, 1, len, f);
-    (*out_buf)[len] = '\0';
+    size_t nread = fread(*out_buf, 1, (size_t)len, f);
+    (*out_buf)[nread] = '\0';
     fclose(f);
     return 0;
 }
