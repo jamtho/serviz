@@ -3,6 +3,31 @@
 #include <stdio.h>
 #include <string.h>
 
+/* Coverage: spec_parse from a file path (not just string). */
+static void test_parse_from_file(void) {
+    /* Write a temp spec file. */
+    FILE *f = fopen("/tmp/opencode/serviz_test_spec.json", "wb");
+    assert(f);
+    fputs("{\"sql\":\"SELECT 1\",\"layers\":[{\"mark\":\"line\"}]}", f);
+    fclose(f);
+
+    Spec spec;
+    int rc = spec_parse("/tmp/opencode/serviz_test_spec.json", &spec);
+    assert(rc == 0);
+    assert(strcmp(spec.sql, "SELECT 1") == 0);
+    assert(spec.layer_count == 1);
+    spec_free(&spec);
+    printf("PASS: parse from file\n");
+}
+
+/* Coverage: spec_parse on a missing file returns error. */
+static void test_parse_missing_file(void) {
+    Spec spec;
+    int rc = spec_parse("/tmp/opencode/serviz_does_not_exist.json", &spec);
+    assert(rc != 0);
+    printf("PASS: parse missing file\n");
+}
+
 static void test_minimal(void) {
     const char *json = "{\"sql\":\"SELECT 1\",\"layers\":[{\"mark\":\"line\"}]}";
     Spec spec;
@@ -143,7 +168,54 @@ static void test_candle_missing_bucket(void) {
     printf("PASS: candle missing bucket\n");
 }
 
+/* BUG #7 regression: unknown mark names should be rejected, not silently
+ * fall back to "line". */
+static void test_unknown_mark_rejected(void) {
+    const char *json = "{\"sql\":\"SELECT 1\",\"layers\":[{\"mark\":\"lines\"}]}";
+    Spec spec;
+    int rc = spec_parse_string(json, &spec);
+    assert(rc != 0);
+    printf("PASS: unknown mark rejected\n");
+}
+
+static void test_typo_mark_rejected(void) {
+    const char *json = "{\"sql\":\"SELECT 1\",\"layers\":[{\"mark\":\"lne\"}]}";
+    Spec spec;
+    int rc = spec_parse_string(json, &spec);
+    assert(rc != 0);
+    printf("PASS: typo mark rejected\n");
+}
+
+/* BUG #6 regression: histogram bucket <= 0 should be rejected at spec
+ * parse time, not produce inf/garbage downstream. */
+static void test_histogram_zero_bucket_rejected(void) {
+    const char *json = "{\"sql\":\"SELECT 1\",\"layers\":[{\"mark\":\"histogram\",\"bucket\":0}]}";
+    Spec spec;
+    int rc = spec_parse_string(json, &spec);
+    assert(rc != 0);
+    printf("PASS: histogram zero bucket rejected\n");
+}
+
+static void test_histogram_negative_bucket_rejected(void) {
+    const char *json = "{\"sql\":\"SELECT 1\",\"layers\":[{\"mark\":\"histogram\",\"bucket\":-5}]}";
+    Spec spec;
+    int rc = spec_parse_string(json, &spec);
+    assert(rc != 0);
+    printf("PASS: histogram negative bucket rejected\n");
+}
+
+/* BUG #6 regression: candle bucket <= 0 should be rejected. */
+static void test_candle_zero_bucket_rejected(void) {
+    const char *json = "{\"sql\":\"SELECT 1\",\"layers\":[{\"mark\":\"candle\",\"bucket\":0}]}";
+    Spec spec;
+    int rc = spec_parse_string(json, &spec);
+    assert(rc != 0);
+    printf("PASS: candle zero bucket rejected\n");
+}
+
 int main(void) {
+    test_parse_from_file();
+    test_parse_missing_file();
     test_minimal();
     test_full();
     test_missing_sql();
@@ -157,6 +229,11 @@ int main(void) {
     test_candle_with_bucket();
     test_histogram_missing_bucket();
     test_candle_missing_bucket();
+    test_unknown_mark_rejected();
+    test_typo_mark_rejected();
+    test_histogram_zero_bucket_rejected();
+    test_histogram_negative_bucket_rejected();
+    test_candle_zero_bucket_rejected();
     printf("All spec tests passed.\n");
     return 0;
 }

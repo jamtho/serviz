@@ -41,12 +41,13 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/third_party/duckdb/duckdb.cpp")
 else()
     message(FATAL_ERROR
         "DuckDB amalgamation not found at third_party/duckdb/duckdb.cpp\n"
-        "Copy from geoviz or run download script")
+        "Run: python scripts/download_deps.py")
 endif()
 
 # ----- Main executable -----
 add_executable(serviz
     src/main.c
+    src/cli.c
     src/spec.c
     src/data.c
     src/axes.c
@@ -57,7 +58,7 @@ add_executable(serviz
 )
 
 target_include_directories(serviz PRIVATE src)
-target_link_libraries(serviz PRIVATE raylib cjson duckdb)
+target_link_libraries(serviz PRIVATE raylib cjson duckdb serviz_warnings)
 
 if(NOT WIN32)
     target_link_libraries(serviz PRIVATE pthread dl m)
@@ -65,9 +66,11 @@ endif()
 
 # Compiler warnings
 if(MSVC)
-    target_compile_options(serviz PRIVATE /W3)
+    add_library(serviz_warnings INTERFACE)
+    target_compile_options(serviz_warnings INTERFACE /W3)
 else()
-    target_compile_options(serviz PRIVATE -Wall -Wextra -Wpedantic)
+    add_library(serviz_warnings INTERFACE)
+    target_compile_options(serviz_warnings INTERFACE -Wall -Wextra -Wpedantic)
 endif()
 
 # ----- Tests -----
@@ -75,26 +78,27 @@ enable_testing()
 
 add_executable(test_colormap tests/test_colormap.c src/colormap.c)
 target_include_directories(test_colormap PRIVATE src)
+target_link_libraries(test_colormap PRIVATE serviz_warnings)
 add_test(NAME test_colormap COMMAND test_colormap)
 
 add_executable(test_transform tests/test_transform.c)
 target_include_directories(test_transform PRIVATE src)
-target_link_libraries(test_transform PRIVATE m)
+target_link_libraries(test_transform PRIVATE m serviz_warnings)
 add_test(NAME test_transform COMMAND test_transform)
 
 add_executable(test_palette tests/test_palette.c src/palette.c)
 target_include_directories(test_palette PRIVATE src)
-target_link_libraries(test_palette PRIVATE raylib)
+target_link_libraries(test_palette PRIVATE raylib serviz_warnings)
 add_test(NAME test_palette COMMAND test_palette)
 
 add_executable(test_spec tests/test_spec.c src/spec.c src/colormap.c)
 target_include_directories(test_spec PRIVATE src)
-target_link_libraries(test_spec PRIVATE cjson)
+target_link_libraries(test_spec PRIVATE cjson serviz_warnings)
 add_test(NAME test_spec COMMAND test_spec)
 
 add_executable(test_data tests/test_data.c src/data.c)
 target_include_directories(test_data PRIVATE src)
-target_link_libraries(test_data PRIVATE duckdb)
+target_link_libraries(test_data PRIVATE duckdb serviz_warnings)
 if(WIN32)
     target_link_libraries(test_data PRIVATE ws2_32)
 endif()
@@ -102,5 +106,15 @@ add_test(NAME test_data COMMAND test_data)
 
 add_executable(test_axes tests/test_axes.c src/axes.c)
 target_include_directories(test_axes PRIVATE src)
-target_link_libraries(test_axes PRIVATE raylib m)
+target_link_libraries(test_axes PRIVATE raylib m serviz_warnings)
 add_test(NAME test_axes COMMAND test_axes)
+
+add_executable(test_cli tests/test_cli.c src/cli.c)
+target_include_directories(test_cli PRIVATE src)
+target_link_libraries(test_cli PRIVATE serviz_warnings)
+add_test(NAME test_cli COMMAND test_cli)
+
+add_executable(test_tooltip tests/test_tooltip.c src/tooltip.c)
+target_include_directories(test_tooltip PRIVATE src)
+target_link_libraries(test_tooltip PRIVATE raylib serviz_warnings)
+add_test(NAME test_tooltip COMMAND test_tooltip)

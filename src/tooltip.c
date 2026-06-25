@@ -23,11 +23,8 @@ HitResult tooltip_hit_test(const DataSet *ds, const Viewport *vp,
 
     double best_dist_sq = (double)max_dist_px * max_dist_px;
 
-    /* Convert mouse to data space for x-range narrowing */
-    double margin_data = (double)max_dist_px / ca->width * (vp->x_max - vp->x_min);
     double x_lo = pixel_to_data_x(mouse_x - max_dist_px, vp, ca);
     double x_hi = pixel_to_data_x(mouse_x + max_dist_px, vp, ca);
-    (void)margin_data;
 
     for (int si = 0; si < ds->series_count; si++) {
         const Series *s = &ds->series[si];

@@ -675,6 +675,14 @@ static int probe_columns(const char *user_sql,
         duckdb_destroy_result(&res);
     }
 
+    if (strstr(user_sql, "s3://") || strstr(user_sql, "S3://")) {
+        duckdb_result res;
+        if (duckdb_query(con, "INSTALL httpfs; LOAD httpfs;", &res) != DuckDBSuccess) {
+            fprintf(stderr, "Warning: failed to load httpfs extension\n");
+        }
+        duckdb_destroy_result(&res);
+    }
+
     char *probe_sql = (char *)malloc(strlen(user_sql) + 64);
     sprintf(probe_sql, "SELECT * FROM (%s) AS _t LIMIT 0", user_sql);
 
@@ -773,6 +781,12 @@ int data_load_ohlc(const char *user_sql, const char *bucket, DataSet *out) {
     out->low = (double *)malloc(out->count * sizeof(double));
     out->close = (double *)malloc(out->count * sizeof(double));
 
+    if (!out->open || !out->high || !out->low || !out->close) {
+        fprintf(stderr, "Error: failed to allocate OHLC arrays\n");
+        data_free(out);
+        return -1;
+    }
+
     /* Find the OHLC extra columns and parse their string values */
     int open_idx = -1, high_idx = -1, low_idx = -1, close_idx = -1;
     for (int e = 0; e < out->extra_count; e++) {
@@ -801,6 +815,12 @@ int data_load_ohlc(const char *user_sql, const char *bucket, DataSet *out) {
 }
 
 int data_load_histogram(const char *user_sql, double bucket_width, DataSet *out) {
+    if (bucket_width <= 0.0) {
+        fprintf(stderr, "Error: histogram bucket width must be positive (got %g)\n",
+                bucket_width);
+        return -1;
+    }
+
     char x_col[128], y_col[128];
     bool x_is_time;
 

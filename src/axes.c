@@ -36,7 +36,6 @@ void axes_generate_ticks_numeric(double lo, double hi, int target_count, TickSet
 
     for (double v = start; v <= hi + step * 0.01 && out->count < MAX_TICKS; v += step) {
         Tick *t = &out->ticks[out->count];
-        t->value = v;
         if (fabs(v) < step * 0.01) v = 0.0; /* Snap near-zero to zero */
         t->value = v;
 

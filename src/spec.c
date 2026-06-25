@@ -31,12 +31,13 @@ static int read_file(const char *path, char **out_buf) {
     return 0;
 }
 
-static MarkType parse_mark(const char *s) {
+static int parse_mark(const char *s) {
+    if (strcmp(s, "line") == 0) return MARK_LINE;
     if (strcmp(s, "point") == 0) return MARK_POINT;
     if (strcmp(s, "bar") == 0) return MARK_BAR;
     if (strcmp(s, "histogram") == 0) return MARK_HISTOGRAM;
     if (strcmp(s, "candle") == 0) return MARK_CANDLE;
-    return MARK_LINE;
+    return -1;
 }
 
 int spec_parse_string(const char *json, Spec *out) {
@@ -87,7 +88,16 @@ int spec_parse_string(const char *json, Spec *out) {
             cJSON_Delete(root);
             return -1;
         }
-        l->mark = parse_mark(mark->valuestring);
+        int mark_val = parse_mark(mark->valuestring);
+        if (mark_val < 0) {
+            fprintf(stderr, "Error: layer %d has unknown mark '%s' "
+                    "(expected: line, point, bar, histogram, or candle)\n",
+                    i, mark->valuestring);
+            spec_free(out);
+            cJSON_Delete(root);
+            return -1;
+        }
+        l->mark = (MarkType)mark_val;
 
         cJSON *scheme = cJSON_GetObjectItemCaseSensitive(layer, "scheme");
         l->scheme = colormap_from_name(
@@ -124,6 +134,19 @@ int spec_parse_string(const char *json, Spec *out) {
             spec_free(out);
             cJSON_Delete(root);
             return -1;
+        }
+
+        /* Reject non-positive numeric buckets: they produce inf/garbage. */
+        if (l->bucket && (l->mark == MARK_HISTOGRAM || l->mark == MARK_CANDLE)) {
+            char *end;
+            double bv = strtod(l->bucket, &end);
+            if (end != l->bucket && *end == '\0' && bv <= 0.0) {
+                fprintf(stderr, "Error: layer %d bucket must be positive "
+                        "(got '%s')\n", i, l->bucket);
+                spec_free(out);
+                cJSON_Delete(root);
+                return -1;
+            }
         }
     }
 

@@ -5,6 +5,7 @@
 #include "tooltip.h"
 #include "palette.h"
 #include "transform.h"
+#include "cli.h"
 #include "raylib.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -74,19 +75,20 @@ static ChartArea compute_chart_area(int w, int h) {
 }
 
 int main(int argc, char *argv[]) {
-    const char *spec_file = NULL;
-    const char *screenshot_path = NULL;
+    CliArgs args;
+    if (cli_parse(argc, argv, &args) != 0) return 1;
 
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
-            screenshot_path = argv[++i];
-        } else if (!spec_file) {
-            spec_file = argv[i];
-        } else {
-            fprintf(stderr, "Usage: serviz [spec.json] [--screenshot path]\n");
-            return 1;
-        }
+    if (args.help) {
+        cli_print_usage(stdout);
+        return 0;
     }
+    if (args.version) {
+        printf("serviz 0.1.0\n");
+        return 0;
+    }
+
+    const char *spec_file = args.spec_file;
+    const char *screenshot_path = args.screenshot_path;
 
     Spec spec;
     if (spec_file) {
@@ -94,8 +96,7 @@ int main(int argc, char *argv[]) {
     } else {
         char *json = read_stdin();
         if (!json || json[0] == '\0') {
-            fprintf(stderr, "Usage: serviz [spec.json] [--screenshot path]\n");
-            fprintf(stderr, "       Or pipe spec JSON to stdin\n");
+            cli_print_usage(stderr);
             free(json);
             return 1;
         }

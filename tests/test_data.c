@@ -153,6 +153,29 @@ static void test_ohlc_numeric(void) {
     printf("PASS: ohlc numeric\n");
 }
 
+/* BUG #6 regression: zero bucket width must be rejected at the data layer
+ * (defence in depth — spec_parse also rejects, but data_load_histogram
+ * must not produce inf/garbage if called directly). */
+static void test_histogram_zero_bucket_rejected(void) {
+    DataSet ds;
+    int rc = data_load_histogram("SELECT i AS x, i AS y FROM range(10) t(i)", 0.0, &ds);
+    assert(rc != 0);
+    printf("PASS: histogram zero bucket rejected\n");
+}
+
+/* Edge case: single point. */
+static void test_single_point(void) {
+    DataSet ds;
+    int rc = data_load("SELECT 1 AS x, 2.0 AS y", &ds);
+    assert(rc == 0);
+    assert(ds.count == 1);
+    assert(ds.series_count == 1);
+    assert(ds.x[0] == 1.0);
+    assert(ds.y[0] == 2.0);
+    data_free(&ds);
+    printf("PASS: single point\n");
+}
+
 int main(void) {
     test_basic_xy();
     test_column_inference_value();
@@ -166,6 +189,8 @@ int main(void) {
     test_case_insensitive_cols();
     test_histogram();
     test_ohlc_numeric();
+    test_histogram_zero_bucket_rejected();
+    test_single_point();
     printf("All data tests passed.\n");
     return 0;
 }
